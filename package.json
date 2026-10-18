@@ -1,0 +1,25 @@
+{
+  "name": "howlongtobeat-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only HowLongToBeat MCP server for Claude Code and Codex",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "bin": { "howlongtobeat-mcp": "dist/index.js" },
+  "files": ["dist", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "test:live": "npm run build && node scripts/live.mjs",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "howlongtobeat": "1.8.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": { "@types/node": "^22.0.0", "typescript": "^5.9.3" },
+  "overrides": { "howlongtobeat": { "axios": "^1.0.0" } }
+}
