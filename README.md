@@ -1,32 +1,34 @@
 # HowLongToBeat MCP
 
+[![Soutenir sur Ko-fi](https://img.shields.io/badge/Ko--fi-Soutenir%20le%20projet-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/pierrobn)
+[![CI](https://github.com/pierro-bn/howlongtobeat-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pierro-bn/howlongtobeat-mcp/actions/workflows/ci.yml)
+
 Serveur MCP en lecture seule pour rechercher des jeux et consulter leurs durées
 sur HowLongToBeat, depuis **Claude Code** ou **Codex local** (application, CLI ou
-extension). Il utilise le projet [ckatzorke/howlongtobeat](https://github.com/ckatzorke/howlongtobeat)
-comme bibliothèque. Aucun compte HowLongToBeat ni clé API n'est nécessaire.
+extension). Basé sur [ckatzorke/howlongtobeat](https://github.com/ckatzorke/howlongtobeat),
+il conserve le modèle de jeu et le calcul de similarité d'origine, avec un accès
+réseau adapté au site actuel. Aucun compte HowLongToBeat ni clé API n'est nécessaire.
 
-**État de validation :** compilation et 20 tests locaux réussis le 18 octobre 2026.
-La recherche de Portal et sa fiche ont également été validées contre le site réel
-via le processus MCP stdio. Le correctif utilise la route `/api/search/site`,
-initialise sa session, conserve les mêmes en-têtes et lit les données structurées
-des fiches à leur adresse canonique `/game/ID`.
+Projet communautaire indépendant, sans affiliation avec HowLongToBeat.
 
 ## Installation locale
 
-Prérequis : Node.js 22 ou plus et npm. Depuis le dossier du projet :
+Prérequis : **Node.js 22 ou plus**, npm et Git.
 
 ```sh
+git clone https://github.com/pierro-bn/howlongtobeat-mcp.git
+cd howlongtobeat-mcp
 npm ci --ignore-scripts
 npm run build
-npm test
 ```
 
 Le fichier à lancer est `dist/index.js`. Utiliser son **chemin absolu**, entre
 guillemets si nécessaire. `npm start` lance également le serveur ; l'absence
 de sortie est normale, il attend des messages MCP sur stdin.
 
-Ce projet fonctionne localement sans publication GitHub ou npm. Le manifeste
-contient `private: true` pour empêcher une publication npm accidentelle.
+Le projet est distribué sous forme de sources sur GitHub, sans publication npm.
+Le champ `private: true` du manifeste empêche une publication npm accidentelle ;
+il ne concerne pas la visibilité du dépôt GitHub.
 
 ## Claude Code
 
@@ -93,8 +95,10 @@ GitHub ne crée pas un endpoint MCP accessible à ChatGPT.
 | `hltb_get_game` | `game_id` (ID HLTB numérique sous forme de chaîne), `detail` | Fiche d'un jeu avec ses durées |
 
 `detail` vaut `compact` par défaut ; `detailed` ajoute description, plateformes
-et image. Chaque résultat inclut la source, l'heure de récupération et le lien
-vers le jeu. Les données sont rendues à la fois en texte JSON et dans
+et image lorsqu'elles sont disponibles. Pour la description complète, utiliser
+`hltb_get_game` : la recherche ne fournit généralement pas de résumé.
+Chaque réponse réussie inclut la source et l'heure de récupération ; chaque jeu
+inclut son lien HowLongToBeat. Les données sont rendues à la fois en texte JSON et dans
 `structuredContent` pour les clients MCP compatibles.
 
 Exemples d'appels :
@@ -124,18 +128,24 @@ Exemples de demandes à l'assistant :
   n'est pas substitué à une durée de campagne manquante.
 - Un ID HLTB n'est **pas** un ID Steam. La similarité mesure le texte du titre,
   pas la certitude qu'il s'agit du bon jeu ou de la bonne édition.
-- La bibliothèque ne renvoie que la première page (jusqu'à 20 résultats).
-  `coverage` et `truncated` décrivent cette limite. `no_results` ne prouve pas
-  l'absence du jeu dans tout le catalogue.
+- Le serveur demande uniquement la première page, avec une taille de 20 résultats.
+  `coverage` indique cette couverture limitée ; `truncated` indique seulement si
+  `limit` a écarté des jeux de cette page. `truncated: false` ne signifie donc pas
+  que tout le catalogue a été parcouru. `no_results` ne prouve pas l'absence du jeu.
 - Aucun cache persistant, aucune écriture distante et aucune télémétrie ajoutée.
   La session de recherche est conservée en mémoire pendant dix minutes et
   renouvelée une seule fois si la recherche reçoit HTTP 401/403.
-  Les titres recherchés et IDs sont envoyés à HowLongToBeat par la bibliothèque.
+  Les titres recherchés et IDs sont envoyés directement à HowLongToBeat par le serveur.
 - Le site n'offre pas ici une API contractuelle : blocages réseau et changements
   de format peuvent rendre le fournisseur inutilisable. Les descriptions
   récupérées doivent être traitées comme du contenu externe non fiable.
 
 ## Tests et diagnostic
+
+Validation du 18 octobre 2026 : **20 tests réussis**, compilation réussie et
+recherche de Portal avec lecture de sa fiche vérifiées sur le site réel via MCP
+stdio. La CI a également réussi sur Windows/Linux avec Node 22 et 24. Ces tests
+ne garantissent pas la disponibilité future du site.
 
 ```sh
 npm test
@@ -147,8 +157,7 @@ Les tests ordinaires n'accèdent pas au site : validation, erreurs, durées
 inconnues, limites, annulation, timeout, protocole stdio, initialisation et
 renouvellement de session, erreurs HTTP et données structurées de fiche.
 Un test conserve la vérification de la bibliothèque d'origine avec Axios.
-`test:live` interroge vraiment Portal
-via le processus MCP et renvoie un code non nul si la recherche ou la fiche
+`test:live` interroge vraiment Portal via le processus MCP et renvoie un code non nul si la recherche ou la fiche
 échoue. Il ne fait pas partie de la CI déterministe.
 
 Codes d'erreur : `UPSTREAM_UNAVAILABLE`, `UPSTREAM_FORMAT_CHANGED`,
@@ -164,6 +173,22 @@ TLS ou contourner les restrictions d'accès pour faire passer le test.
 
 La CI couvre Node 22/24 sur Windows/Linux. Aucune configuration personnelle
 Claude/Codex n'est modifiée par les commandes de compilation ou de test.
+
+## Mise à jour
+
+Depuis le dossier du dépôt, avec une copie de travail sans modifications locales :
+
+```sh
+git pull --ff-only
+npm ci --ignore-scripts
+npm run build
+```
+
+Redémarrer ensuite le client MCP pour qu'il lance la nouvelle version compilée.
+
+## Soutenir le projet
+
+Si ce serveur MCP vous est utile, vous pouvez soutenir son développement et sa maintenance avec un don facultatif sur [Ko-fi](https://ko-fi.com/pierrobn). Merci pour votre soutien !
 
 ## Licence et provenance
 
