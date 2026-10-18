@@ -1,4 +1,7 @@
-import { HowLongToBeatService, type HowLongToBeatEntry } from 'howlongtobeat';
+import { type HowLongToBeatEntry } from 'howlongtobeat';
+import { WebsiteProvider } from './provider.js';
+import { LookupError } from './errors.js';
+export { LookupError } from './errors.js';
 
 export type Detail = 'compact' | 'detailed';
 export interface Provider {
@@ -6,12 +9,7 @@ export interface Provider {
   detail(id: string, signal?: AbortSignal): Promise<HowLongToBeatEntry>;
 }
 
-export class LookupError extends Error {
-  constructor(public code: string, message: string) { super(message); }
-}
-
-// Upstream rounds search times to whole hours and represents missing times as 0.
-// Do not turn these zeroes into claims that a game takes zero hours to complete.
+// Zero seconds means no estimate. Keep it distinct from a zero-hour game.
 function hours(value: number): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
@@ -23,7 +21,7 @@ export function normalize(entry: HowLongToBeatEntry, detail: Detail, fromSearch:
   return {
     id: entry.id,
     name: entry.name,
-    url: `https://howlongtobeat.com/game?id=${entry.id}`,
+    url: `https://howlongtobeat.com/game/${entry.id}`,
     times_hours: {
       main: hours(entry.gameplayMain),
       main_extra: hours(entry.gameplayMainExtra),
@@ -41,7 +39,7 @@ export function normalize(entry: HowLongToBeatEntry, detail: Detail, fromSearch:
 }
 
 export class GameService {
-  constructor(private provider: Provider = new HowLongToBeatService(), private timeoutMs = 25_000) {}
+  constructor(private provider: Provider = new WebsiteProvider(), private timeoutMs = 25_000) {}
 
   private async run<T>(operation: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
     const timeout = AbortSignal.timeout(this.timeoutMs);
@@ -80,7 +78,7 @@ export class GameService {
       returned: games.length,
       available_in_page: entries.length,
       truncated: entries.length > limit,
-      precision: 'upstream_search_rounded_hours',
+      precision: 'source_seconds_converted_to_hours',
       games,
     };
   }
@@ -90,7 +88,7 @@ export class GameService {
     if (entry?.id !== id) throw new LookupError('UPSTREAM_FORMAT_CHANGED', 'Unexpected game ID in response.');
     return {
       source: 'HowLongToBeat', fetched_at: new Date().toISOString(),
-      status: 'ok', precision: 'upstream_parsed_hours',
+      status: 'ok', precision: 'source_seconds_converted_to_hours',
       game: normalize(entry, detail, false),
     };
   }

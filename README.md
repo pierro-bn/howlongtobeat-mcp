@@ -5,11 +5,11 @@ sur HowLongToBeat, depuis **Claude Code** ou **Codex local** (application, CLI o
 extension). Il utilise le projet [ckatzorke/howlongtobeat](https://github.com/ckatzorke/howlongtobeat)
 comme bibliothèque. Aucun compte HowLongToBeat ni clé API n'est nécessaire.
 
-**État de validation :** compilation et 10 tests locaux réussis le 18 octobre 2026,
-dont une connexion MCP réelle via stdio et des échanges HTTP simulés avec la
-bibliothèque d'origine. Les appels au site réel ont échoué depuis l'environnement
-de développement (HTTP 403). La récupération réelle des durées **n'est pas encore
-validée**. Le serveur expose cette indisponibilité comme une erreur MCP.
+**État de validation :** compilation et 20 tests locaux réussis le 18 octobre 2026.
+La recherche de Portal et sa fiche ont également été validées contre le site réel
+via le processus MCP stdio. Le correctif utilise la route `/api/search/site`,
+initialise sa session, conserve les mêmes en-têtes et lit les données structurées
+des fiches à leur adresse canonique `/game/ID`.
 
 ## Installation locale
 
@@ -115,23 +115,24 @@ Exemples de demandes à l'assistant :
 ## Interprétation et limites
 
 - Les durées sont des estimations en **heures**, pas des garanties.
-- `null` indique une valeur absente, invalide ou arrondie à zéro par la bibliothèque.
-- La recherche d'origine arrondit les durées à l'heure entière. Le parseur de
-  fiches conserve les demi-heures mais ramène les durées en minutes à une heure
-  et calcule la moyenne des intervalles. Le serveur ne prétend pas améliorer
-  cette précision ; `precision` indique le mode de récupération.
-- Vérifier `time_labels` : la bibliothèque peut ranger Solo, Co-Op et Vs. dans
-  les trois champs `main`, `main_extra`, `completionist`. Ce ne sont alors pas
-  nécessairement trois niveaux de complétion d'une campagne.
+- `null` indique une estimation absente ou nulle dans la source.
+- Les champs `comp_main`, `comp_plus` et `comp_100` sont convertis de secondes en
+  heures sans arrondi à l'heure entière. `precision` vaut
+  `source_seconds_converted_to_hours`. Les chiffres peuvent différer des valeurs
+  arrondies affichées sur le site ; ils restent des estimations communautaires.
+- `time_labels` décrit les trois catégories de complétion. Le temps multijoueur
+  n'est pas substitué à une durée de campagne manquante.
 - Un ID HLTB n'est **pas** un ID Steam. La similarité mesure le texte du titre,
   pas la certitude qu'il s'agit du bon jeu ou de la bonne édition.
 - La bibliothèque ne renvoie que la première page (jusqu'à 20 résultats).
   `coverage` et `truncated` décrivent cette limite. `no_results` ne prouve pas
   l'absence du jeu dans tout le catalogue.
 - Aucun cache persistant, aucune écriture distante et aucune télémétrie ajoutée.
+  La session de recherche est conservée en mémoire pendant dix minutes et
+  renouvelée une seule fois si la recherche reçoit HTTP 401/403.
   Les titres recherchés et IDs sont envoyés à HowLongToBeat par la bibliothèque.
 - Le site n'offre pas ici une API contractuelle : blocages réseau et changements
-  de format peuvent rendre la bibliothèque inutilisable. Les descriptions
+  de format peuvent rendre le fournisseur inutilisable. Les descriptions
   récupérées doivent être traitées comme du contenu externe non fiable.
 
 ## Tests et diagnostic
@@ -143,27 +144,32 @@ npm audit --omit=dev
 ```
 
 Les tests ordinaires n'accèdent pas au site : validation, erreurs, durées
-inconnues, limites, annulation, timeout, protocole stdio et compatibilité Axios
-avec les formats simulés du fournisseur. `test:live` interroge vraiment Portal
+inconnues, limites, annulation, timeout, protocole stdio, initialisation et
+renouvellement de session, erreurs HTTP et données structurées de fiche.
+Un test conserve la vérification de la bibliothèque d'origine avec Axios.
+`test:live` interroge vraiment Portal
 via le processus MCP et renvoie un code non nul si la recherche ou la fiche
 échoue. Il ne fait pas partie de la CI déterministe.
 
-Codes d'erreur : `UPSTREAM_UNAVAILABLE`, `UPSTREAM_FORMAT_CHANGED`, `TIMEOUT`,
+Codes d'erreur : `UPSTREAM_UNAVAILABLE`, `UPSTREAM_FORMAT_CHANGED`,
+`UPSTREAM_FORBIDDEN`, `UPSTREAM_RATE_LIMITED`, `UPSTREAM_NOT_FOUND`, `TIMEOUT`,
 `CANCELLED`, `INTERNAL_ERROR`. Une erreur de lecture n'est jamais convertie en
-résultat vide. Le délai global est de 25 secondes, avec annulation transmise à
-la bibliothèque ; ses propres requêtes HTTP ont un délai de 20 secondes.
+résultat vide. Le délai global est de 25 secondes pour l'ensemble d'un appel,
+avec annulation transmise à chaque requête HTTP. Un HTTP 429 n'est pas retenté.
 
 En cas d'erreur : vérifier l'accès au site depuis la machine du client puis
 relancer `test:live`. Un HTTP 403 ne permet pas de distinguer à lui seul un
 blocage réseau, un refus du site ou une route devenue obsolète. Ne pas désactiver
 TLS ou contourner les restrictions d'accès pour faire passer le test.
 
-La CI préparée couvre Node 22/24 sur Windows/Linux. Elle n'a pas été exécutée sur
-GitHub tant que le dépôt n'est pas publié. Aucune configuration personnelle
+La CI couvre Node 22/24 sur Windows/Linux. Aucune configuration personnelle
 Claude/Codex n'est modifiée par les commandes de compilation ou de test.
 
 ## Licence et provenance
 
-MIT pour le serveur MCP ; WTFPL v2 pour la bibliothèque d'origine. Voir
+MIT pour le serveur MCP ; WTFPL v2 pour la bibliothèque d'origine. Le modèle
+`HowLongToBeatEntry` et le calcul de similarité d'origine sont conservés.
+L'accès réseau et la lecture des fiches sont implémentés dans `src/provider.ts`
+pour suivre le format actuel du site. Voir
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Le verrouillage npm inclut une
 mise à jour d'Axios imposée à la dépendance amont pour éviter sa version 0.22.
